@@ -1,0 +1,48 @@
+
+body {
+    color: #999;
+    font-size: 15px;
+    font-family: 'Raleway', sans-serif;
+    line-height: 1.80857;
+}
+
+.box{
+	margin: 5px;
+	padding: 0px;
+	background: #eeeeee;
+}
+
+.heading-box{
+	margin: 5px;
+	padding: 0px;
+	background: #2196f3;
+	color: #ffffff;
+}
+
+.col-xs-3, .col-xs-4, .container{
+	padding-left: 2px;
+	padding-right: 2px;
+}
+
+.heading{
+	margin: 0 0 10px 0;
+	padding: 10px;
+	color: #ffffff;
+	background: #2196f3;
+}
+
+button, .link{
+	color: #ffffff;
+	background: #2196f3;
+	border: 1px solid #2196f3;
+	margin: 5px;
+}
+
+.button-red{
+	background: #e91e63;
+	border: 1px solid #e91e63;
+}
+
+hr{
+	color: #333333;
+}
