@@ -4,11 +4,12 @@
   "keywords": [
     "NodeTasks"
   ],
-  "start" : "node nodetasks.js",
+
   "website": "https://ketan-node-tasks.herokuapp.com/",
   "success_url": "/",
   "scripts": {
-    "postdeploy": "bundle exec rake bootstrap"
+    "postdeploy": "bundle exec rake bootstrap",
+    "start" : "node nodetasks.js"
   },
   "env": {
     "SECRET_TOKEN": {
