@@ -4,22 +4,18 @@
   "keywords": [
     "NodeTasks"
   ],
-
   "website": "https://ketan-node-tasks.herokuapp.com/",
   "success_url": "/",
   "scripts": {
     "postdeploy": "bundle exec rake bootstrap",
-    "start" : "node nodetasks.js"
+    "start": "node nodetasks.js"
   },
   "dependencies": {
-
-    "express":"*",
-
-    "body-parser":"*",
-
-    "fs": "*"
-
- },
+    "express": "*",
+    "body-parser": "*",
+    "fs": "*",
+    "pg": "*"
+  },
   "env": {
     "SECRET_TOKEN": {
       "description": "A secret key for verifying the integrity of signed cookies.",
