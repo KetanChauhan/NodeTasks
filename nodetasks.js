@@ -4,18 +4,13 @@ var app = express();
 var fs = require("fs");
 
 const { Client } = require('pg');
-const connectionString = 'postgres://eoybfmnxcceouw:fd9dbc8c6a291f9c64b26c3ba9d77bf7d2b21d05ad0addc74b78379887564fc1@ec2-18-214-208-89.compute-1.amazonaws.com:5432/dcqvbmsm1nitbq';
+
+process.env.NODE_TLS_REJECT_UNAUTHORIZED='0'
+const connectionString = 'postgres://eoybfmnxcceouw:fd9dbc8c6a291f9c64b26c3ba9d77bf7d2b21d05ad0addc74b78379887564fc1@ec2-18-214-208-89.compute-1.amazonaws.com:5432/dcqvbmsm1nitbq?ssl=true';
 const client = new Client({
 	connectionString,
 });
-client.connect()
-	.then(
-		client.query('SELECT NOW() as now')
-			.then(res => console.log(res.rows[0]))
-			.catch(e => console.error(e.stack))
-	)
-	.catch(e => console.error(e.stack));
-
+client.connect();
 
 app.use(express.static(__dirname + '/client'));
 app.use(bodyParser.json({ limit: `50mb` }));
@@ -44,6 +39,18 @@ function getTasksFromStringContent(str){
 	return tasks;
 }
 
+function getTasksFromRows(rows){
+	var tasks = [];
+	for(let r of rows){
+		let task = {};
+		task["id"] = r["id"];
+		task["name"] = r["name"];
+		task["isDone"] = r["isdone"]===1;
+		tasks.push(task);
+	}
+	return tasks;
+}
+
 function getStringContentFromTasks(tasks){
 	var str = '';
 	tasks.forEach(t=>{
@@ -69,86 +76,99 @@ app.get('/', function (req, res) {
 	});
 });
 app.get('/task', function (req, res) {
-	fs.readFile( __dirname + "/" + "data/tasks.csv", 'utf8', function (err, data) {
-		var tasks = getTasksFromStringContent(data);
-		var response = {};
-		response["success"] = true;
-		response["tasks"] = tasks;
-		res.end(JSON.stringify(response));
-	});
+	client.query('SELECT * FROM task ORDER BY id')
+		.then(result => {
+			var tasks = getTasksFromRows(result.rows);
+			var response = {};
+			response["success"] = true;
+			response["tasks"] = tasks;
+			res.end(JSON.stringify(response));
+		})
+		.catch(e => console.error(e.stack));
 });
 app.get('/task/:id', function (req, res) {
-	fs.readFile( __dirname + "/" + "data/tasks.csv", 'utf8', function (err, data) {
-		var tasks = getTasksFromStringContent(data);
-		var id = req.params.id;
-		var result = tasks.filter(t=>t.id==id);
-		var response = {};
-		if(result.length>0){
-			response["success"] = true;
-			response["task"] = result[0];
-		}else{
-			response["success"] = false;
-			response["errorMessage"] = "No task found.";
-		}
-		res.end(JSON.stringify(response));
-	});
-});
-app.post('/task', function (req, res) {
-	fs.readFile( __dirname + "/" + "data/tasks.csv", 'utf8', function (err, data) {
-		var tasks = getTasksFromStringContent(data);
-		var task = req.body;
-		
-		var response = {};
-		
-		let isUpdate = false;
-		if(task.id!=undefined && tasks.findIndex(t=>t.id==task.id)!=-1){
-			tasks[tasks.findIndex(t=>t.id==task.id)] = task;
-			isUpdate = true;
-		}else{
-			let newId = tasks.reduce((a,t)=>Math.max(t.id,a),-1)+1;
-			task.id = newId;
-			tasks.push(task);
-		}
-			
-		fs.writeFile('data/tasks.csv', getStringContentFromTasks(tasks), function(err) {
-			if (err) {
-				response["success"] = false;
-				response["errorMessage"] = isUpdate ? "Task updation failed." : "Task addition failed.";
-			}else{
+	var id = req.params.id;
+	const query = {
+		text: 'SELECT * FROM task WHERE id = $1',
+		values: [id]
+	}
+	client.query(query)
+		.then(result => {
+			var tasks = getTasksFromRows(result.rows);
+			var response = {};
+			if(tasks.length>0){
 				response["success"] = true;
-				response["successMessage"] = isUpdate ? "Task updated." : "Task added.";
+				response["task"] = tasks[0];
+			}else{
+				response["success"] = false;
+				response["errorMessage"] = "No task found.";
 			}
 			res.end(JSON.stringify(response));
-		});
-	});
+		})
+		.catch(e => console.error(e.stack));
+});
+app.post('/task', function (req, res) {
+	var task = req.body;
+	const query = {
+		text: 'UPDATE task SET name=$1, isdone=$2, modifiedon=current_date WHERE id=$3',
+		values: [task.name, task.isDone?1:0, task.id]
+	}
+	client.query(query)
+		.then(result => {
+			var count = result.rowCount;
+			var response = {};
+			if(count>0){
+				response["success"] = true;
+				response["successMessage"] = "Task updated.";
+			}else{
+				response["success"] = false;
+				response["errorMessage"] = "Task updation failed.";
+			}
+			res.end(JSON.stringify(response));
+		})
+		.catch(e => console.error(e.stack));
+});
+app.put('/task', function (req, res) {
+	var task = req.body;
+	const query = {
+		text: 'INSERT INTO task(name,isdone,createdon,modifiedon) VALUES ($1, $2, current_date, current_date)',
+		values: [task.name, task.isDone?1:0]
+	}
+	client.query(query)
+		.then(result => {
+			var count = result.rowCount;
+			var response = {};
+			if(count>0){
+				response["success"] = true;
+				response["successMessage"] = "Task added.";
+			}else{
+				response["success"] = false;
+				response["errorMessage"] = "Task addition failed.";
+			}
+			res.end(JSON.stringify(response));
+		})
+		.catch(e => console.error(e.stack));
 });
 app.delete('/task/:id', function (req, res) {
-	fs.readFile( __dirname + "/" + "data/tasks.csv", 'utf8', function (err, data) {
-		var tasks = getTasksFromStringContent(data);
-		var id = req.params.id;
-		var isExist = tasks.some(t=>t.id==id);
-		
-		var response = {};
-		
-		if(!isExist){
-			response["success"] = false;
-			response["errorMessage"] = "Task does not exists.";
+	var id = req.params.id;
+	const query = {
+		text: 'DELETE FROM task WHERE id=$1',
+		values: [id]
+	}
+	client.query(query)
+		.then(result => {
+			var count = result.rowCount;
+			var response = {};
+			if(count>0){
+				response["success"] = true;
+				response["successMessage"] = "Task deleted.";
+			}else{
+				response["success"] = false;
+				response["errorMessage"] = "Task deletion failed.";
+			}
 			res.end(JSON.stringify(response));
-		}else{
-			tasks = tasks.filter(t=>t.id!=id);
-			
-			fs.writeFile('data/tasks.csv', getStringContentFromTasks(tasks), function(err) {
-				if (err) {
-					response["success"] = false;
-					response["errorMessage"] = "Task deletion failed.";
-				}else{
-					response["success"] = true;
-					response["errorMessage"] = "Task deleted.";
-				}
-				res.end(JSON.stringify(response));
-			});
-		}
-	});
+		})
+		.catch(e => console.error(e.stack));
 });
 
 const PORT = process.env.PORT || 5000;

@@ -13,6 +13,15 @@ app.factory('taskService', ['$http', function($http) {
   
   var saveTask = function(task,onSuccess,onError) {
 	$http({
+		method: 'PUT',
+		url: '/task',
+		headers: {'Content-Type': 'application/json; charset=UTF-8'},
+		data: task
+	}).then(onSuccess,onError);
+  };
+
+  var updateTask = function(task,onSuccess,onError) {
+	$http({
 		method: 'POST',
 		url: '/task',
 		headers: {'Content-Type': 'application/json; charset=UTF-8'},
@@ -45,6 +54,7 @@ app.factory('taskService', ['$http', function($http) {
   return {
     getBlankTask: getBlankTask,
     saveTask: saveTask,
+	updateTask: updateTask,
     deleteTask: deleteTask,
     getTasks: getTasks
   };
@@ -124,7 +134,7 @@ app.controller('home', ['$scope','$location','taskService', function($scope, $lo
 			//alert('Error occured.');
 			$scope.isTaskFormDisabled = false;
 		}
-		taskService.saveTask(task,onSuccess,onError);
+		taskService.updateTask(task,onSuccess,onError);
 
 	};
 	$scope.setup = function(){
