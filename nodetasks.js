@@ -3,6 +3,20 @@ var bodyParser = require('body-parser');
 var app = express();
 var fs = require("fs");
 
+const { Client } = require('pg');
+const connectionString = 'postgres://eoybfmnxcceouw:fd9dbc8c6a291f9c64b26c3ba9d77bf7d2b21d05ad0addc74b78379887564fc1@ec2-18-214-208-89.compute-1.amazonaws.com:5432/dcqvbmsm1nitbq';
+const client = new Client({
+	connectionString,
+});
+client.connect()
+	.then(
+		client.query('SELECT NOW() as now')
+			.then(res => console.log(res.rows[0]))
+			.catch(e => console.error(e.stack))
+	)
+	.catch(e => console.error(e.stack));
+
+
 app.use(express.static(__dirname + '/client'));
 app.use(bodyParser.json({ limit: `50mb` }));
 app.use(bodyParser.urlencoded({ limit: `50mb`, extended: true }));
