@@ -24,22 +24,6 @@ app.use((req, res, next) => {
     next();
 });
 
-function getTasksFromStringContent(str){
-	var tasks = [];
-	var lines = str.split("\n");
-	lines.forEach(l=>{
-		let fields = l.split(",");
-		if(fields.length>=3){
-			let task = {};
-			task["id"] = fields[0];
-			task["name"] = fields[1];
-			task["isDone"] = fields[2]==='1';
-			tasks.push(task);
-		}
-	});
-	return tasks;
-}
-
 function getTasksFromRows(rows){
 	var tasks = [];
 	for(let r of rows){
@@ -50,19 +34,6 @@ function getTasksFromRows(rows){
 		tasks.push(task);
 	}
 	return tasks;
-}
-
-function getStringContentFromTasks(tasks){
-	var str = '';
-	tasks.forEach(t=>{
-		str += t.id;
-		str += ",";
-		str += t.name;
-		str += ",";
-		str += t.isDone ? '1' : '0';
-		str += "\n";
-	});
-	return str;
 }
 
 app.get('/', function (req, res) {
