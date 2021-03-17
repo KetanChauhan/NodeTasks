@@ -48,7 +48,7 @@
 						<h1 class="heading">{{ pagename }}</h1>
 						<div class="input-group mb-3" ng-repeat="t in tasks track by $index">
 							<div class="input-group-text">
-								<input class="form-check-input mt-0" type="checkbox" value="" aria-label="Checkbox for following text input">
+								<input class="form-check-input mt-0" type="checkbox" ng-model="t.isDone" ng-change="updateTask(t)">
 							</div>
 							<span type="text" class="form-control input-group-text" ng-hide="t.isModifying">{{ t.name }}</span>
 							<input type="text" name="box_name" class="form-control" ng-show="t.isModifying" required ng-model="t.name">
