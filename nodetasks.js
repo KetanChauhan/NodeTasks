@@ -103,7 +103,7 @@ app.post('/task', function (req, res) {
 app.put('/task', function (req, res) {
 	var task = req.body;
 	const query = {
-		text: 'INSERT INTO task(name,isdone,createdon,modifiedon) VALUES ($1, $2, current_date, current_date)',
+		text: 'INSERT INTO task(name,isdone,createdon,modifiedon) VALUES ($1, $2, current_date, current_date) RETURNING id',
 		values: [task.name, task.isDone?1:0]
 	}
 	client.query(query)
@@ -113,6 +113,7 @@ app.put('/task', function (req, res) {
 			if(count>0){
 				response["success"] = true;
 				response["successMessage"] = "Task added.";
+                                response["insertedId"] = result.rows[0].id;
 			}else{
 				response["success"] = false;
 				response["errorMessage"] = "Task addition failed.";
