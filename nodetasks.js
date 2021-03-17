@@ -31,6 +31,8 @@ function getTasksFromRows(rows){
 		task["id"] = r["id"];
 		task["name"] = r["name"];
 		task["isDone"] = r["isdone"]===1;
+		task["createdOn"] = r["createdon"];
+		task["modifiedOn"] = r["modifiedon"];
 		tasks.push(task);
 	}
 	return tasks;
