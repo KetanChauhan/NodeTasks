@@ -1,15 +1,14 @@
-
 body {
     color: #999;
-    font-size: 15px;
-    font-family: 'Raleway', sans-serif;
+    font-size: 20px;
+    font-family: sans-serif;
     line-height: 1.80857;
 }
 
 .box{
 	margin: 5px;
-	padding: 0px;
-	background: #eeeeee;
+	padding: 5px;
+	border: 2px solid #eeeeee;
 }
 
 .heading-box{
@@ -25,10 +24,7 @@ body {
 }
 
 .heading{
-	margin: 0 0 10px 0;
-	padding: 10px;
-	color: #ffffff;
-	background: #2196f3;
+	text-align: center;
 }
 
 button, .link{
@@ -45,4 +41,9 @@ button, .link{
 
 hr{
 	color: #333333;
+}
+
+.fa, .fas, .far, .fal, .fab {
+	font-size: 20px;
+	padding: 0 5 0 5;
 }
