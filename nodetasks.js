@@ -25,6 +25,7 @@ app.use((req, res, next) => {
 });
 
 function getTasksFromRows(rows){
+	console.log(rows);
 	var tasks = [];
 	for(let r of rows){
 		let id = r["id"];
