@@ -31,7 +31,7 @@ function getTasksFromRows(rows){
 		let tagid = r["tag_id"];
 		let existing_task = tasks.find(t=>t.id==id);
 		if(existing_task && existing_task!=undefined){
-			let existing_tag = tasks.tags.find(t=>t.id==tagid);
+			let existing_tag = existing_task.tags.find(t=>t.id==tagid);
 			if(!existing_tag || existing_tag==undefined){
 				let tag = {};
 				tag["id"] = r["tag_id"];
