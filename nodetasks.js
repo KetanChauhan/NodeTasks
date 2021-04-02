@@ -27,13 +27,42 @@ app.use((req, res, next) => {
 function getTasksFromRows(rows){
 	var tasks = [];
 	for(let r of rows){
-		let task = {};
-		task["id"] = r["id"];
-		task["name"] = r["name"];
-		task["isDone"] = r["isdone"]===1;
-		task["createdOn"] = r["createdon"];
-		task["modifiedOn"] = r["modifiedon"];
-		tasks.push(task);
+		let id = r["id"];
+		let tagid = r["tag_id"];
+		let existing_task = tasks.find(t=>t.id==id);
+		if(existing_task && existing_task!=undefined){
+			let existing_tag = tasks.tags.find(t=>t.id==tagid);
+			if(!existing_tag || existing_tag==undefined){
+				let tag = {};
+				tag["id"] = r["tag_id"];
+				tag["name"] = r["tag_name"];
+				tag["color"] = r["tag_color"];
+				tag["createdOn"] = r["tag_createdon"];
+				tag["modifiedOn"] = r["tag_modifiedon"];
+				existing_task.tags.push(tag);
+				
+			}
+		}else{
+			let task = {};
+			task["id"] = r["id"];
+			task["name"] = r["name"];
+			task["isDone"] = r["isdone"]===1;
+			task["createdOn"] = r["createdon"];
+			task["modifiedOn"] = r["modifiedon"];
+			
+			task.tags = [];
+			if(r["tag_id"] && r["tag_id"].length > 0){
+				let tag = {};
+				tag["id"] = r["tag_id"];
+				tag["name"] = r["tag_name"];
+				tag["color"] = r["tag_color"];
+				tag["createdOn"] = r["tag_createdon"];
+				tag["modifiedOn"] = r["tag_modifiedon"];
+				task.tags.push(tag);
+			}
+			
+			tasks.push(task);
+		}
 	}
 	return tasks;
 }
@@ -63,7 +92,8 @@ app.get('/', function (req, res) {
 	});
 });
 app.get('/task', function (req, res) {
-	client.query('SELECT * FROM task ORDER BY id')
+	client.query('SELECT ts.*,tg.id as tag_id,tg.name as tag_name,tg.color as tag_color,tg.createdon as tag_createdon,tg.modifiedon as tag_modifiedon '+
+'FROM task ts LEFT JOIN task_tag_map ttm ON ts.id=ttm.taskid LEFT JOIN tag tg ON ttm.tagid=tg.id ORDER BY ts.id;')
 		.then(result => {
 			var tasks = getTasksFromRows(result.rows);
 			var response = {};
