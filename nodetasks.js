@@ -41,7 +41,6 @@ function getTasksFromRows(rows){
 				tag["createdOn"] = r["tag_createdon"];
 				tag["modifiedOn"] = r["tag_modifiedon"];
 				existing_task.tags.push(tag);
-				
 			}
 		}else{
 			let task = {};
@@ -52,7 +51,7 @@ function getTasksFromRows(rows){
 			task["modifiedOn"] = r["modifiedon"];
 			
 			task.tags = [];
-			if(r["tag_id"] && r["tag_id"].length > 0){
+			if(r["tag_id"]){
 				let tag = {};
 				tag["id"] = r["tag_id"];
 				tag["name"] = r["tag_name"];
