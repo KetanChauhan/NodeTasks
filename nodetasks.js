@@ -84,7 +84,7 @@ app.get('/task/:id', function (req, res) {
 app.post('/task', function (req, res) {
 	var task = req.body;
 	const query = {
-		text: 'UPDATE task SET name=$1, isdone=$2, modifiedon=current_date WHERE id=$3',
+		text: 'UPDATE task SET name=$1, isdone=$2, modifiedon=CURRENT_TIMESTAMP WHERE id=$3',
 		values: [task.name, task.isDone?1:0, task.id]
 	}
 	client.query(query)
@@ -105,7 +105,7 @@ app.post('/task', function (req, res) {
 app.put('/task', function (req, res) {
 	var task = req.body;
 	const query = {
-		text: 'INSERT INTO task(name,isdone,createdon,modifiedon) VALUES ($1, $2, current_date, current_date) RETURNING id',
+		text: 'INSERT INTO task(name,isdone,createdon,modifiedon) VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id',
 		values: [task.name, task.isDone?1:0]
 	}
 	client.query(query)
