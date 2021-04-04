@@ -230,10 +230,6 @@ updateTags = async function(task, isUpdate){
 
 deleteTags = async function(id){
 	try {
-		if(task.tags.length==0){
-			return true;
-		}
-
 		const tagDeleteQuery = {text: DataQuery.DELETE_TAG_OF_TASK,values: [id]}
 		var tagDeleteResult = await client.query(tagDeleteQuery);
 		return true;
