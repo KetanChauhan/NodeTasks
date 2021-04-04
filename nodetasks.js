@@ -4,6 +4,7 @@ var app = express();
 var fs = require("fs");
 
 const { Client } = require('pg');
+const { DataQuery } = require('./dataquery');
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED='0'
 var dbUrl = process.env.DATABASE_URL;
@@ -24,45 +25,32 @@ app.use((req, res, next) => {
     next();
 });
 
-function getTasksFromRows(rows){
-	console.log(rows);
+function getTasksFromRows(rows, tags){
 	var tasks = [];
+	var tagMap = tags.reduce(function(map, tag) {
+		map[tag.id] = tag;
+		return map;
+	}, {});
 	for(let r of rows){
-		let id = r["id"];
-		let tagid = r["tag_id"];
-		let existing_task = tasks.find(t=>t.id==id);
-		if(existing_task && existing_task!=undefined){
-			let existing_tag = existing_task.tags.find(t=>t.id==tagid);
-			if(!existing_tag || existing_tag==undefined){
-				let tag = {};
-				tag["id"] = r["tag_id"];
-				tag["name"] = r["tag_name"];
-				tag["color"] = r["tag_color"];
-				tag["createdOn"] = r["tag_createdon"];
-				tag["modifiedOn"] = r["tag_modifiedon"];
-				existing_task.tags.push(tag);
+		let task = {};
+		task.id = r["id"];
+		task.name = r["name"];
+		task.isDone = r["isdone"]===1;
+		task.createdOn = r["createdon"];
+		task.modifiedOn = r["modifiedon"];
+		task.tags = [];
+
+		if(r["tags"] && r["tags"]!=null && r["tags"].length>0){
+			let tagIds = r["tags"].split(',');
+			for(let tid of tagIds){
+				let tag = tagMap[tid];
+				if(tag){
+					task.tags.push(tag);
+				}
 			}
-		}else{
-			let task = {};
-			task["id"] = r["id"];
-			task["name"] = r["name"];
-			task["isDone"] = r["isdone"]===1;
-			task["createdOn"] = r["createdon"];
-			task["modifiedOn"] = r["modifiedon"];
-			
-			task.tags = [];
-			if(r["tag_id"]){
-				let tag = {};
-				tag["id"] = r["tag_id"];
-				tag["name"] = r["tag_name"];
-				tag["color"] = r["tag_color"];
-				tag["createdOn"] = r["tag_createdon"];
-				tag["modifiedOn"] = r["tag_modifiedon"];
-				task.tags.push(tag);
-			}
-			
-			tasks.push(task);
 		}
+		
+		tasks.push(task);
 	}
 	return tasks;
 }
@@ -70,11 +58,11 @@ function getTagsFromRows(rows){
 	var tags = [];
 	for(let r of rows){
 		let tag = {};
-		tag["id"] = r["id"];
-		tag["name"] = r["name"];
-		tag["color"] = r["color"];
-		tag["createdOn"] = r["createdon"];
-		tag["modifiedOn"] = r["modifiedon"];
+		tag.id = r["id"];
+		tag.name = r["name"];
+		tag.color = r["color"];
+		tag.createdOn = r["createdon"];
+		tag.modifiedOn = r["modifiedon"];
 		tags.push(tag);
 	}
 	return tags;
@@ -91,200 +79,280 @@ app.get('/', function (req, res) {
 		return res.end();
 	});
 });
-app.get('/task', function (req, res) {
-	client.query('SELECT ts.*,tg.id as tag_id,tg.name as tag_name,tg.color as tag_color,tg.createdon as tag_createdon,tg.modifiedon as tag_modifiedon '+
-'FROM task ts LEFT JOIN task_tag_map ttm ON ts.id=ttm.taskid LEFT JOIN tag tg ON ttm.tagid=tg.id ORDER BY ts.id;')
-		.then(result => {
-			var tasks = getTasksFromRows(result.rows);
-			var response = {};
+app.get('/task', async function (req, res) {
+	try {
+		var tasksResult = await client.query(DataQuery.GET_ALL_TASKS);
+		var tagsResult = await client.query(DataQuery.GET_ALL_TAGS);
+		
+		var tasks = getTasksFromRows(tasksResult.rows, tagsResult.rows);
+		var response = {};
+		response["success"] = true;
+		response["tasks"] = tasks;
+		res.end(JSON.stringify(response));
+	} catch(e) {
+		console.error(e);
+		var response = {};
+		response["success"] = false;
+		response["errorMessage"] = "Error occured";
+		res.status(500).end(JSON.stringify(response));
+	}
+});
+app.get('/task/:id', async function (req, res) {
+	var id = req.params.id;
+	try {
+		const query = {text: DataQuery.TASK_BY_ID, values: [id]}
+		var tasksResult = await client.query(query);
+		var tagsResult = await client.query(DataQuery.GET_ALL_TAGS);
+		
+		var tasks = getTasksFromRows(tasksResult.rows, tagsResult.rows);
+		var response = {};
+		if(tasks.length>0){
 			response["success"] = true;
-			response["tasks"] = tasks;
-			res.end(JSON.stringify(response));
-		})
-		.catch(e => console.error(e.stack));
-});
-app.get('/task/:id', function (req, res) {
-	var id = req.params.id;
-	const query = {
-		text: 'SELECT * FROM task WHERE id = $1',
-		values: [id]
+			response["task"] = tasks[0];
+		}else{
+			response["success"] = false;
+			response["errorMessage"] = "No task found.";
+		}
+		res.end(JSON.stringify(response));
+	} catch(e) {
+		console.error(e);
+		var response = {};
+		response["success"] = false;
+		response["errorMessage"] = "Error occured";
+		res.status(500).end(JSON.stringify(response));
 	}
-	client.query(query)
-		.then(result => {
-			var tasks = getTasksFromRows(result.rows);
-			var response = {};
-			if(tasks.length>0){
-				response["success"] = true;
-				response["task"] = tasks[0];
-			}else{
-				response["success"] = false;
-				response["errorMessage"] = "No task found.";
-			}
-			res.end(JSON.stringify(response));
-		})
-		.catch(e => console.error(e.stack));
 });
-app.post('/task', function (req, res) {
+app.post('/task', async function (req, res) {
 	var task = req.body;
-	const query = {
-		text: 'UPDATE task SET name=$1, isdone=$2, modifiedon=CURRENT_TIMESTAMP WHERE id=$3',
-		values: [task.name, task.isDone?1:0, task.id]
+	try {
+		const query = {text: DataQuery.UPDATE_TASK, values: [task.name, task.isDone?1:0, task.id]}
+		var taskUpdateResult = await client.query(query);
+
+		var isTagUpdated = await this.updateTags(task, true);
+		var response = {};
+		if(taskUpdateResult.rowCount>0 && isTagUpdated){
+			response["success"] = true;
+			response["successMessage"] = "Task updated.";
+		}else{
+			response["success"] = false;
+			response["errorMessage"] = "Task updation failed.";
+		}
+		res.end(JSON.stringify(response));
+	} catch(e) {
+		console.error(e);
+		var response = {};
+		response["success"] = false;
+		response["errorMessage"] = "Error occured";
+		res.status(500).end(JSON.stringify(response));
 	}
-	client.query(query)
-		.then(result => {
-			var count = result.rowCount;
-			var response = {};
-			if(count>0){
-				response["success"] = true;
-				response["successMessage"] = "Task updated.";
-			}else{
-				response["success"] = false;
-				response["errorMessage"] = "Task updation failed.";
-			}
-			res.end(JSON.stringify(response));
-		})
-		.catch(e => console.error(e.stack));
 });
-app.put('/task', function (req, res) {
+app.put('/task', async function (req, res) {
 	var task = req.body;
-	const query = {
-		text: 'INSERT INTO task(name,isdone,createdon,modifiedon) VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id',
-		values: [task.name, task.isDone?1:0]
+
+	try {
+		const query = {text: DataQuery.INSERT_TASK, values: [task.name, task.isDone?1:0]}
+		var taskInsertResult = await client.query(query);
+		if(taskInsertResult.rowCount>0){
+			task.id = taskInsertResult.rows[0].id;
+		}
+
+		var isTagUpdated = await this.updateTags(task, false);
+		var response = {};
+		if(taskInsertResult.rowCount>0 && isTagUpdated){
+			response["success"] = true;
+			response["successMessage"] = "Task added.";
+			response["insertedId"] = taskInsertResult.rows[0].id;
+		}else{
+			response["success"] = false;
+			response["errorMessage"] = "Task addition failed.";
+		}
+		res.end(JSON.stringify(response));
+	} catch(e) {
+		console.error(e);
+		var response = {};
+		response["success"] = false;
+		response["errorMessage"] = "Error occured";
+		res.status(500).end(JSON.stringify(response));
 	}
-	client.query(query)
-		.then(result => {
-			var count = result.rowCount;
-			var response = {};
-			if(count>0){
-				response["success"] = true;
-				response["successMessage"] = "Task added.";
-                                response["insertedId"] = result.rows[0].id;
-			}else{
-				response["success"] = false;
-				response["errorMessage"] = "Task addition failed.";
-			}
-			res.end(JSON.stringify(response));
-		})
-		.catch(e => console.error(e.stack));
 });
-app.delete('/task/:id', function (req, res) {
+app.delete('/task/:id', async function (req, res) {
 	var id = req.params.id;
-	const query = {
-		text: 'DELETE FROM task WHERE id=$1',
-		values: [id]
+	try {
+		var isTagDeleted = await this.deleteTags(id);
+
+		const query = {text: DataQuery.DELETE_TASK, values: [id]}
+		var result = await client.query(query);
+		var count = result.rowCount;
+
+		var response = {};
+		if(count>0 && isTagDeleted){
+			response["success"] = true;
+			response["successMessage"] = "Task deleted.";
+		}else{
+			response["success"] = false;
+			response["errorMessage"] = "Task deletion failed.";
+		}
+		res.end(JSON.stringify(response));
+	} catch(e) {
+		console.error(e);
+		var response = {};
+		response["success"] = false;
+		response["errorMessage"] = "Error occured";
+		res.status(500).end(JSON.stringify(response));
 	}
-	client.query(query)
-		.then(result => {
-			var count = result.rowCount;
-			var response = {};
-			if(count>0){
-				response["success"] = true;
-				response["successMessage"] = "Task deleted.";
-			}else{
-				response["success"] = false;
-				response["errorMessage"] = "Task deletion failed.";
-			}
-			res.end(JSON.stringify(response));
-		})
-		.catch(e => console.error(e.stack));
 });
 
+updateTags = async function(task, isUpdate){
+	try {
+		if(isUpdate){
+			const tagDeleteQuery = {text: DataQuery.DELETE_TAG_OF_TASK,values: [task.id]}
+			var tagDeleteResult = await client.query(tagDeleteQuery);
+		}
+
+		if(task.tags.length==0){
+			return true;
+		}
+		var insValues = [];
+		const tagAddQuery = {
+			text: DataQuery.INSERT_TAG_OF_TASK + task.tags.map((t) => `($${(insValues.push(task.id))}, $${(insValues.push(t.id))})`).join(','),
+			values: insValues
+		}
+		var tagAddResult = await client.query(tagAddQuery);
+
+		return tagAddResult.rowCount==task.tags.length;
+	} catch(e) {
+		console.error(e);
+		return false;
+	}
+};
+
+deleteTags = async function(id){
+	try {
+		if(task.tags.length==0){
+			return true;
+		}
+
+		const tagDeleteQuery = {text: DataQuery.DELETE_TAG_OF_TASK,values: [id]}
+		var tagDeleteResult = await client.query(tagDeleteQuery);
+		return true;
+	} catch(e) {
+		console.error(e);
+		return false;
+	}
+};
+
 //tags
-app.get('/tag', function (req, res) {
-	client.query('SELECT * FROM tag ORDER BY id')
-		.then(result => {
-			var tags = getTagsFromRows(result.rows);
-			var response = {};
+app.get('/tag', async function (req, res) {
+	try {
+		var tagsResult = await client.query(DataQuery.GET_ALL_TAGS);
+		
+		var tags = getTagsFromRows(tagsResult.rows);
+		var response = {};
+		response["success"] = true;
+		response["tags"] = tags;
+		res.end(JSON.stringify(response));
+	} catch(e) {
+		console.error(e);
+		var response = {};
+		response["success"] = false;
+		response["errorMessage"] = "Error occured";
+		res.status(500).end(JSON.stringify(response));
+	}
+});
+app.get('/tag/:id', async function (req, res) {
+	var id = req.params.id;
+	try {
+		const query = {text: DataQuery.TAG_BY_ID, values: [id]}
+		var tagsResult = await client.query(query);
+		
+		var tags = getTagsFromRows(tagsResult.rows);
+		var response = {};
+		if(tags.length>0){
 			response["success"] = true;
-			response["tags"] = tags;
-			res.end(JSON.stringify(response));
-		})
-		.catch(e => console.error(e.stack));
-});
-app.get('/tag/:id', function (req, res) {
-	var id = req.params.id;
-	const query = {
-		text: 'SELECT * FROM tag WHERE id = $1',
-		values: [id]
+			response["tag"] = tags[0];
+		}else{
+			response["success"] = false;
+			response["errorMessage"] = "No tag found.";
+		}
+		res.end(JSON.stringify(response));
+	} catch(e) {
+		console.error(e);
+		var response = {};
+		response["success"] = false;
+		response["errorMessage"] = "Error occured";
+		res.status(500).end(JSON.stringify(response));
 	}
-	client.query(query)
-		.then(result => {
-			var tags = getTagsFromRows(result.rows);
-			var response = {};
-			if(tags.length>0){
-				response["success"] = true;
-				response["task"] = tags[0];
-			}else{
-				response["success"] = false;
-				response["errorMessage"] = "No task found.";
-			}
-			res.end(JSON.stringify(response));
-		})
-		.catch(e => console.error(e.stack));
 });
-app.post('/tag', function (req, res) {
+app.post('/tag', async function (req, res) {
 	var tag = req.body;
-	const query = {
-		text: 'UPDATE tag SET name=$1, color=$2, modifiedon=CURRENT_TIMESTAMP WHERE id=$3',
-		values: [tag.name, tag.color, tag.id]
+	try {
+		const query = {text: DataQuery.UPDATE_TAG, values: [tag.name, tag.color, tag.id]}
+		var tagUpdateResult = await client.query(query);
+
+		var response = {};
+		if(tagUpdateResult.rowCount>0){
+			response["success"] = true;
+			response["successMessage"] = "Tag updated.";
+		}else{
+			response["success"] = false;
+			response["errorMessage"] = "Tag updation failed.";
+		}
+		res.end(JSON.stringify(response));
+	} catch(e) {
+		console.error(e);
+		var response = {};
+		response["success"] = false;
+		response["errorMessage"] = "Error occured";
+		res.status(500).end(JSON.stringify(response));
 	}
-	client.query(query)
-		.then(result => {
-			var count = result.rowCount;
-			var response = {};
-			if(count>0){
-				response["success"] = true;
-				response["successMessage"] = "Tag updated.";
-			}else{
-				response["success"] = false;
-				response["errorMessage"] = "Tag updation failed.";
-			}
-			res.end(JSON.stringify(response));
-		})
-		.catch(e => console.error(e.stack));
 });
-app.put('/tag', function (req, res) {
+app.put('/tag', async function (req, res) {
 	var tag = req.body;
-	const query = {
-		text: 'INSERT INTO tag(name,color,createdon,modifiedon) VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id',
-		values: [tag.name, tag.color]
+
+	try {
+		const query = {text: DataQuery.INSERT_TAG, values: [tag.name, tag.color]}
+		var tagInsertResult = await client.query(query);
+
+		var response = {};
+		if(tagInsertResult.rowCount>0){
+			response["success"] = true;
+			response["successMessage"] = "Tag added.";
+			response["insertedId"] = tagInsertResult.rows[0].id;
+		}else{
+			response["success"] = false;
+			response["errorMessage"] = "Tag addition failed.";
+		}
+		res.end(JSON.stringify(response));
+	} catch(e) {
+		console.error(e);
+		var response = {};
+		response["success"] = false;
+		response["errorMessage"] = "Error occured";
+		res.status(500).end(JSON.stringify(response));
 	}
-	client.query(query)
-		.then(result => {
-			var count = result.rowCount;
-			var response = {};
-			if(count>0){
-				response["success"] = true;
-				response["successMessage"] = "Tag added.";
-                                response["insertedId"] = result.rows[0].id;
-			}else{
-				response["success"] = false;
-				response["errorMessage"] = "Tag addition failed.";
-			}
-			res.end(JSON.stringify(response));
-		})
-		.catch(e => console.error(e.stack));
 });
-app.delete('/tag/:id', function (req, res) {
+app.delete('/tag/:id', async function (req, res) {
 	var id = req.params.id;
-	const query = {
-		text: 'DELETE FROM tag WHERE id=$1',
-		values: [id]
+	try {
+		const query = {text: DataQuery.DELETE_TAG, values: [id]}
+		var result = await client.query(query);
+		var count = result.rowCount;
+		var response = {};
+		if(count>0){
+			response["success"] = true;
+			response["successMessage"] = "Tag deleted.";
+		}else{
+			response["success"] = false;
+			response["errorMessage"] = "Tag deletion failed.";
+		}
+		res.end(JSON.stringify(response));
+	} catch(e) {
+		console.error(e);
+		var response = {};
+		response["success"] = false;
+		response["errorMessage"] = "Error occured";
+		res.status(500).end(JSON.stringify(response));
 	}
-	client.query(query)
-		.then(result => {
-			var count = result.rowCount;
-			var response = {};
-			if(count>0){
-				response["success"] = true;
-				response["successMessage"] = "Tag deleted.";
-			}else{
-				response["success"] = false;
-				response["errorMessage"] = "Tag deletion failed.";
-			}
-			res.end(JSON.stringify(response));
-		})
-		.catch(e => console.error(e.stack));
 });
 
 const PORT = process.env.PORT || 5000;
