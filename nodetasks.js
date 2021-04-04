@@ -283,11 +283,9 @@ app.get('/tag/:id', async function (req, res) {
 });
 app.post('/tag', async function (req, res) {
 	var tag = req.body;
-	console.log(tag);
 	try {
 		const query = {text: DataQuery.UPDATE_TAG, values: [tag.name, tag.color, tag.id]}
 		var tagUpdateResult = await client.query(query);
-	console.log(tagUpdateResult);
 
 		var response = {};
 		if(tagUpdateResult.rowCount>0){
