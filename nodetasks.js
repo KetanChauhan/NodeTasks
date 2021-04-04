@@ -104,7 +104,8 @@ app.get('/task/:id', async function (req, res) {
 		var tasksResult = await client.query(query);
 		var tagsResult = await client.query(DataQuery.GET_ALL_TAGS);
 		
-		var tasks = getTasksFromRows(tasksResult.rows, tagsResult.rows);
+		var tags = getTagsFromRows(tagsResult.rows);
+		var tasks = getTasksFromRows(tasksResult.rows, tags);
 		var response = {};
 		if(tasks.length>0){
 			response["success"] = true;
